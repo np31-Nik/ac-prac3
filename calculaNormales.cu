@@ -116,6 +116,20 @@ int CalculoNormalesCPU()
 // ---------------------------------------------------------------
 // ---------------------------------------------------------------
 
+/*
+Esta es la función que tiene que ser implementada por el grupo. 
+
+El objetivo es que sea funcionalmente equivalente a la descrita anteriormente, 
+con la diferencia de que los resultados se devolverán en 
+los vectores globales (ya creados en la función principal) NormalUGPU, NormalVGPU y NormalWGPU. 
+Como ya se ha dicho, este vector será comparado a efectos de corrección en la función runTest.
+
+La función debe incluir la gestión de memoria para el paso de datos desde la CPU a la GPU y viceversa, 
+así como la llamada a una o varias funciones kernel de CUDA que efectúen la paralelización 
+de las operaciones siguiendo el paradigma SIMD usando la GPU del computador. 
+Esta función o funciones kernel deberán ser definidas por el grupo y se da libertad sobre su contenido y definición.
+*/
+
  int CalculoNormalesGPU()
 {
 	 return OKCALC;
