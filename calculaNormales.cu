@@ -130,8 +130,59 @@ de las operaciones siguiendo el paradigma SIMD usando la GPU del computador.
 Esta función o funciones kernel deberán ser definidas por el grupo y se da libertad sobre su contenido y definición.
 */
 
+__global__ void calculadorNormales(float* resultado, TSurf aux, char dim) {
+
+	switch (dim) {
+	case 'x':
+
+		break;
+
+	case 'y':
+
+		break;
+
+	case 'z':
+
+		break;
+	}
+}
+
  int CalculoNormalesGPU()
 {
+	 TSurf aux;
+	 aux.Buffer = S.Buffer;
+	 aux.VPoints = S.VPoints;
+	 aux.UPoints = S.UPoints;
+
+
+	 cudaMalloc((void**) &aux.UPoints, (sizeof(int) * S.UPoints));
+	 cudaMalloc((void**)&aux.VPoints, (sizeof(int) * S.VPoints));
+	 cudaMalloc(&aux.Buffer, (sizeof(TPoint3D) * S.UPoints * S.VPoints));
+
+	 cudaMemcpy((void **) aux.UPoints, (void **) S.UPoints, (sizeof(int) * S.UPoints), cudaMemcpyHostToDevice);
+	 cudaMemcpy((void**)aux.VPoints, (void**)S.VPoints, (sizeof(int) * S.VPoints), cudaMemcpyHostToDevice);
+	 cudaMemcpy((void**)aux.Buffer, (void**)S.Buffer, (sizeof(TPoint3D) * S.UPoints * S.VPoints), cudaMemcpyHostToDevice);
+
+	 float* d_NormalUGPU = (float*)malloc(S.UPoints * sizeof(int));
+	 float* d_NormalVGPU = (float*)malloc(S.VPoints * sizeof(int));
+	 float* d_NormalWGPU = (float*)malloc(S.VPoints * S.UPoints * sizeof(int));
+
+	 cudaMalloc(&d_NormalUGPU,  S.UPoints * sizeof(int));
+	 cudaMalloc(&d_NormalVGPU, S.VPoints * sizeof(int));
+	 cudaMalloc(&d_NormalWGPU, S.VPoints * S.UPoints * sizeof(int));
+
+	 dim3 block(512);
+	 dim3 grid( (S.VPoints * S.UPoints +(block.x-1)) / block.x);
+
+	 calculadorNormales<<<grid,block>>>(d_NormalUGPU,aux,'x');
+	 cudaMemcpy(NormalUGPU, d_NormalUGPU, S.UPoints * sizeof(int), cudaMemcpyDeviceToHost);
+
+	 calculadorNormales<<<grid,block>>>(d_NormalVGPU,aux,'y');
+	 cudaMemcpy(NormalVGPU, d_NormalVGPU, S.VPoints * sizeof(int), cudaMemcpyDeviceToHost);
+
+	 calculadorNormales<<<grid,block>>>(d_NormalWGPU,aux,'z');
+	 cudaMemcpy(NormalWGPU, d_NormalWGPU, S.VPoints * S.UPoints * sizeof(int), cudaMemcpyDeviceToHost);
+
 	 return OKCALC;
 }
  // ---------------------------------------------------------------
