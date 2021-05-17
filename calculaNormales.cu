@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*  FICHERO:       calculaNormales.cu									          */
 /*  AUTOR:         Jorge Azorin											  */
-/*													                          */
+/*						Nikita							                          */
 /*  RESUMEN												                      */
 /*  ~~~~~~~												                      */
 /* Ejercicio grupal para el cálculo de las normales de una superficie          */
@@ -13,7 +13,6 @@
 #include <string.h>
 #include <math.h>
 #include <assert.h>
-
 
 // includes, project
 #include <cuda.h>
@@ -130,58 +129,107 @@ de las operaciones siguiendo el paradigma SIMD usando la GPU del computador.
 Esta función o funciones kernel deberán ser definidas por el grupo y se da libertad sobre su contenido y definición.
 */
 
-__global__ void calculadorNormales(float* resultado, TSurf aux, char dim) {
+__global__ void calculadorNormales(TPoint3D *d_Buffer, float * d_NormalUGPU, float *d_NormalVGPU, float *d_NormalWGPU, int U, int V) {
+	int id = blockDim.x * blockIdx.x + threadIdx.x;
 
-	switch (dim) {
-	case 'x':
+	if (U * V > id) {
+		int d_vecindadU[9] = { -1,0,1,1,1,0,-1,-1,-1 };
+		int d_vecindadV[9] = { -1,-1,-1,0,1,1,1,0,-1 };
 
-		break;
+		int vecindad, okDir1, okDir2, numDir = 0, v, u, vecindadV, vecindadU;
 
-	case 'y':
+		TPoint3D normal, direct1, direct2;
 
-		break;
+		normal.x = 0;
+		normal.y = 0;
+		normal.z = 0;
 
-	case 'z':
+		for (unsigned nv = 0;nv < 8;nv++) {
+			v = id % V;
+			u = id / V;
 
-		break;
+			vecindadV = v + d_vecindadV[nv];
+			vecindadU = u + d_vecindadU[nv];
+
+			if (vecindadV >= 0 && vecindadU >= 0 && vecindadV < V && vecindadU < U) {
+				vecindad = vecindadU * V + vecindadV;
+
+				direct1.x = d_Buffer[id].x - d_Buffer[vecindad].x;
+				direct1.y = d_Buffer[id].y - d_Buffer[vecindad].y;
+				direct1.z = d_Buffer[id].z - d_Buffer[vecindad].z;
+				okDir1 = 1;
+			}
+			else {
+				direct1.x = 0.0;
+				direct1.y = 0.0;
+				direct1.z = 0.0;
+				okDir1 = 0;
+			}
+			vecindadV = v + d_vecindadV[nv + 1];
+			vecindadU = u + d_vecindadU[nv + 1];
+
+			if (vecindadV >= 0 && vecindadU >= 0 && vecindadV < V && vecindadU < U) {
+				vecindad = vecindadU * V + vecindadV;
+				direct2.x = d_Buffer[id].x - d_Buffer[vecindad].x;
+				direct2.y = d_Buffer[id].y - d_Buffer[vecindad].y;
+				direct2.z = d_Buffer[id].z - d_Buffer[vecindad].z;
+				okDir2 = 1;
+			}
+			else {
+				direct2.x = 0.0;
+				direct2.y = 0.0;
+				direct2.z = 0.0;
+				okDir2 = 0;
+			}
+
+			if (okDir1 == 1 && okDir2 == 1) {
+				normal.x += direct1.y * direct2.z - direct1.z * direct2.y;
+				normal.y += direct1.x * direct2.z - direct1.z * direct2.x;
+				normal.z += direct1.x * direct2.y - direct1.y * direct2.x;
+				numDir++;
+			}
+		}
+		d_NormalUGPU[id] = normal.x / (float)numDir;
+		d_NormalVGPU[id] = normal.y / (float)numDir;
+		d_NormalWGPU[id] = normal.z / (float)numDir;
 	}
 }
 
  int CalculoNormalesGPU()
 {
-	 TSurf aux;
-	 aux.Buffer = S.Buffer;
-	 aux.VPoints = S.VPoints;
-	 aux.UPoints = S.UPoints;
+	 unsigned U, V, k=0;
+	 U = S.UPoints;
+	 V = S.VPoints;
 
+	 TPoint3D* h_Buffer, *d_Buffer;
+	 float* d_NormalVGPU, * d_NormalUGPU, * d_NormalWGPU;
 
-	 cudaMalloc((void**) &aux.UPoints, (sizeof(int) * S.UPoints));
-	 cudaMalloc((void**)&aux.VPoints, (sizeof(int) * S.VPoints));
-	 cudaMalloc(&aux.Buffer, (sizeof(TPoint3D) * S.UPoints * S.VPoints));
+	 h_Buffer = (TPoint3D*)malloc(sizeof(TPoint3D) * U * V);
 
-	 cudaMemcpy((void **) aux.UPoints, (void **) S.UPoints, (sizeof(int) * S.UPoints), cudaMemcpyHostToDevice);
-	 cudaMemcpy((void**)aux.VPoints, (void**)S.VPoints, (sizeof(int) * S.VPoints), cudaMemcpyHostToDevice);
-	 cudaMemcpy((void**)aux.Buffer, (void**)S.Buffer, (sizeof(TPoint3D) * S.UPoints * S.VPoints), cudaMemcpyHostToDevice);
+	 for (unsigned i = 0;i < U;i++) {
+		 for (unsigned j = 0;j < V;j++) {
+			 h_Buffer[k] = S.Buffer[j][i];
+			 k++;
+		 }
+	 }
 
-	 float* d_NormalUGPU = (float*)malloc(S.UPoints * sizeof(int));
-	 float* d_NormalVGPU = (float*)malloc(S.VPoints * sizeof(int));
-	 float* d_NormalWGPU = (float*)malloc(S.VPoints * S.UPoints * sizeof(int));
+	 cudaMalloc(&d_Buffer, sizeof(TPoint3D)* U * V);
+	 cudaMalloc(&d_NormalVGPU, sizeof(float) * U * V);
+	 cudaMalloc(&d_NormalUGPU, sizeof(float) * U * V);
+	 cudaMalloc(&d_NormalWGPU, sizeof(float) * U * V);
 
-	 cudaMalloc(&d_NormalUGPU,  S.UPoints * sizeof(int));
-	 cudaMalloc(&d_NormalVGPU, S.VPoints * sizeof(int));
-	 cudaMalloc(&d_NormalWGPU, S.VPoints * S.UPoints * sizeof(int));
+	 cudaMemcpy(d_Buffer, h_Buffer, sizeof(TPoint3D) * U * V, cudaMemcpyHostToDevice);
 
-	 dim3 block(512);
-	 dim3 grid( (S.VPoints * S.UPoints +(block.x-1)) / block.x);
+	 calculadorNormales << <U * V / 512 + 1, 512 >> > (d_Buffer, d_NormalUGPU, d_NormalVGPU, d_NormalWGPU, U, V);
+	 //
+	 cudaMemcpy(NormalVGPU, d_NormalVGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
+	 cudaMemcpy(NormalWGPU, d_NormalWGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
+	 cudaMemcpy(NormalUGPU, d_NormalUGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
 
-	 calculadorNormales<<<grid,block>>>(d_NormalUGPU,aux,'x');
-	 cudaMemcpy(NormalUGPU, d_NormalUGPU, S.UPoints * sizeof(int), cudaMemcpyDeviceToHost);
-
-	 calculadorNormales<<<grid,block>>>(d_NormalVGPU,aux,'y');
-	 cudaMemcpy(NormalVGPU, d_NormalVGPU, S.VPoints * sizeof(int), cudaMemcpyDeviceToHost);
-
-	 calculadorNormales<<<grid,block>>>(d_NormalWGPU,aux,'z');
-	 cudaMemcpy(NormalWGPU, d_NormalWGPU, S.VPoints * S.UPoints * sizeof(int), cudaMemcpyDeviceToHost);
+	 cudaFree(d_Buffer);
+	 cudaFree(d_NormalVGPU);
+	 cudaFree(d_NormalWGPU);
+	 cudaFree(d_NormalUGPU);
 
 	 return OKCALC;
 }
