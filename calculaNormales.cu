@@ -1,7 +1,15 @@
 /*----------------------------------------------------------------------------*/
 /*  FICHERO:       calculaNormales.cu									          */
 /*  AUTOR:         Jorge Azorin											  */
-/*						Nikita							                          */
+/*						
+* 
+*							TEAM DEEPWEB:
+*								Nikita Polyanskiy
+*								Serhii Vidernikov
+*								Juan Carlos Sanchez Gonzalez
+*								Juan Ramon Morales Gomez
+*								Sohaib Laihi
+*/
 /*  RESUMEN												                      */
 /*  ~~~~~~~												                      */
 /* Ejercicio grupal para el cálculo de las normales de una superficie          */
@@ -114,68 +122,58 @@ int CalculoNormalesCPU()
 // FUNCION A IMPLEMENTAR POR EL GRUPO (paralelización de CalculoNormalesCPU)
 // ---------------------------------------------------------------
 // ---------------------------------------------------------------
+__global__ void calculadorNormales(TPoint3D* d_Buffer, float* d_NormalUGPU, float* d_NormalVGPU, float* d_NormalWGPU, int U, int V) {
 
-/*
-Esta es la función que tiene que ser implementada por el grupo. 
-
-El objetivo es que sea funcionalmente equivalente a la descrita anteriormente, 
-con la diferencia de que los resultados se devolverán en 
-los vectores globales (ya creados en la función principal) NormalUGPU, NormalVGPU y NormalWGPU. 
-Como ya se ha dicho, este vector será comparado a efectos de corrección en la función runTest.
-
-La función debe incluir la gestión de memoria para el paso de datos desde la CPU a la GPU y viceversa, 
-así como la llamada a una o varias funciones kernel de CUDA que efectúen la paralelización 
-de las operaciones siguiendo el paradigma SIMD usando la GPU del computador. 
-Esta función o funciones kernel deberán ser definidas por el grupo y se da libertad sobre su contenido y definición.
-*/
-
-__global__ void calculadorNormales(TPoint3D *d_Buffer, float * d_NormalUGPU, float *d_NormalVGPU, float *d_NormalWGPU, int U, int V) {
 	int id = blockDim.x * blockIdx.x + threadIdx.x;
 
+	int vecindad, okDir1, okDir2, numDir = 0, v, u, vV, vU;
+	TPoint3D normal, direct1, direct2;
+
 	if (U * V > id) {
-		int d_vecindadU[9] = { -1,0,1,1,1,0,-1,-1,-1 };
-		int d_vecindadV[9] = { -1,-1,-1,0,1,1,1,0,-1 };
 
-		int vecindad, okDir1, okDir2, numDir = 0, v, u, vecindadV, vecindadU;
-
-		TPoint3D normal, direct1, direct2;
+		int d_vecindadU[9] = { -1, 0, 1, 1, 1, 0, -1, -1, -1 };
+		int d_vecindadV[9] = { -1, -1, -1, 0, 1, 1, 1, 0, -1 };
 
 		normal.x = 0;
 		normal.y = 0;
 		normal.z = 0;
 
-		for (unsigned nv = 0;nv < 8;nv++) {
+		for (unsigned nv = 0; nv < 8; nv++) {
+
 			v = id % V;
 			u = id / V;
 
-			vecindadV = v + d_vecindadV[nv];
-			vecindadU = u + d_vecindadU[nv];
+			vV = v + d_vecindadV[nv];
+			vU = u + d_vecindadU[nv];
 
-			if (vecindadV >= 0 && vecindadU >= 0 && vecindadV < V && vecindadU < U) {
-				vecindad = vecindadU * V + vecindadV;
+			if (vV >= 0 && vU >= 0 && vV < V && vU < U) {
+				vecindad = vU * V + vV;
 
 				direct1.x = d_Buffer[id].x - d_Buffer[vecindad].x;
 				direct1.y = d_Buffer[id].y - d_Buffer[vecindad].y;
 				direct1.z = d_Buffer[id].z - d_Buffer[vecindad].z;
 				okDir1 = 1;
 			}
-			else {
+			else
+			{
 				direct1.x = 0.0;
 				direct1.y = 0.0;
 				direct1.z = 0.0;
 				okDir1 = 0;
 			}
-			vecindadV = v + d_vecindadV[nv + 1];
-			vecindadU = u + d_vecindadU[nv + 1];
 
-			if (vecindadV >= 0 && vecindadU >= 0 && vecindadV < V && vecindadU < U) {
-				vecindad = vecindadU * V + vecindadV;
+			vV = v + d_vecindadV[nv + 1];
+			vU = v + d_vecindadU[nv + 1];
+
+			if (vV >= 0 && vU >= 0 && vV < V && vU < U) {
+				vecindad = vU * V + vV;
 				direct2.x = d_Buffer[id].x - d_Buffer[vecindad].x;
 				direct2.y = d_Buffer[id].y - d_Buffer[vecindad].y;
 				direct2.z = d_Buffer[id].z - d_Buffer[vecindad].z;
 				okDir2 = 1;
 			}
-			else {
+			else
+			{
 				direct2.x = 0.0;
 				direct2.y = 0.0;
 				direct2.z = 0.0;
@@ -189,49 +187,49 @@ __global__ void calculadorNormales(TPoint3D *d_Buffer, float * d_NormalUGPU, flo
 				numDir++;
 			}
 		}
+
 		d_NormalUGPU[id] = normal.x / (float)numDir;
 		d_NormalVGPU[id] = normal.y / (float)numDir;
 		d_NormalWGPU[id] = normal.z / (float)numDir;
 	}
 }
 
- int CalculoNormalesGPU()
+int CalculoNormalesGPU()
 {
-	 unsigned U, V, k=0;
-	 U = S.UPoints;
-	 V = S.VPoints;
+	unsigned U = S.UPoints, V = S.VPoints, k = 0;
 
-	 TPoint3D* h_Buffer, *d_Buffer;
-	 float* d_NormalVGPU, * d_NormalUGPU, * d_NormalWGPU;
+	float* d_NormalVGPU, * d_NormalUGPU, * d_NormalWGPU;
 
-	 h_Buffer = (TPoint3D*)malloc(sizeof(TPoint3D) * U * V);
+	TPoint3D* h_Buffer, * d_Buffer;
 
-	 for (unsigned i = 0;i < U;i++) {
-		 for (unsigned j = 0;j < V;j++) {
-			 h_Buffer[k] = S.Buffer[j][i];
-			 k++;
-		 }
-	 }
+	h_Buffer = (TPoint3D*)malloc(sizeof(TPoint3D) * U * V);
 
-	 cudaMalloc(&d_Buffer, sizeof(TPoint3D)* U * V);
-	 cudaMalloc(&d_NormalVGPU, sizeof(float) * U * V);
-	 cudaMalloc(&d_NormalUGPU, sizeof(float) * U * V);
-	 cudaMalloc(&d_NormalWGPU, sizeof(float) * U * V);
+	for (unsigned i = 0; i < U; i++) {
+		for (unsigned j = 0; j < V; j++) {
+			h_Buffer[k] = S.Buffer[j][i];
+			k++;
+		}
+	}
 
-	 cudaMemcpy(d_Buffer, h_Buffer, sizeof(TPoint3D) * U * V, cudaMemcpyHostToDevice);
+	cudaMalloc(&d_Buffer, sizeof(TPoint3D)* U * V);
+	cudaMalloc(&d_NormalVGPU, sizeof(float) * U * V);
+	cudaMalloc(&d_NormalUGPU, sizeof(float) * U * V);
+	cudaMalloc(&d_NormalWGPU, sizeof(float) * U * V);
 
-	 calculadorNormales << <U * V / 512 + 1, 512 >> > (d_Buffer, d_NormalUGPU, d_NormalVGPU, d_NormalWGPU, U, V);
-	 //
-	 cudaMemcpy(NormalVGPU, d_NormalVGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
-	 cudaMemcpy(NormalWGPU, d_NormalWGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
-	 cudaMemcpy(NormalUGPU, d_NormalUGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(d_Buffer, h_Buffer, sizeof(TPoint3D) * U * V, cudaMemcpyHostToDevice);
 
-	 cudaFree(d_Buffer);
-	 cudaFree(d_NormalVGPU);
-	 cudaFree(d_NormalWGPU);
-	 cudaFree(d_NormalUGPU);
+	calculadorNormales << < U * V / 512 + 1, 512 >> > (d_Buffer, d_NormalUGPU, d_NormalVGPU, d_NormalWGPU, U, V);
 
-	 return OKCALC;
+	cudaMemcpy(NormalVGPU, d_NormalVGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(NormalUGPU, d_NormalUGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(NormalWGPU, d_NormalWGPU, U * V * sizeof(float), cudaMemcpyDeviceToHost);
+
+	cudaFree(d_Buffer);
+	cudaFree(d_NormalVGPU);
+	cudaFree(d_NormalUGPU);
+	cudaFree(d_NormalWGPU);
+
+	return OKCALC;
 }
  // ---------------------------------------------------------------
  // ---------------------------------------------------------------
@@ -315,7 +313,7 @@ runTest(int argc, char** argv)
 	int comprobar = OKCALC;
 	for (int i = 0; i<numPuntos; i++)
 	{
-		if (((int)NormalVCPU[i]*1000 != (int)NormalVGPU[i])*1000 || ((int)NormalUCPU[i]*1000 != (int)NormalUGPU[i]*1000) || ((int)NormalWCPU[i]*1000 != (int)NormalWGPU[i]*1000))
+		if (((int)NormalVCPU[i] * 1000 != (int)NormalVGPU[i] * 1000) || ((int)NormalUCPU[i] * 1000 != (int)NormalUGPU[i] * 1000) || ((int)NormalWCPU[i] * 1000 != (int)NormalWGPU[i] * 1000))
 		{
 			comprobar = ERRORCALC;
 			fprintf(stderr, "Fallo en el punto %d, valor correcto V=%f U=%f W=%f\n", i, NormalVCPU[i], NormalUCPU[i],NormalWCPU[i]);
